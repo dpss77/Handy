@@ -3,6 +3,7 @@ mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
 mod commands;
+pub mod export;
 mod managers;
 pub mod ollama;
 mod overlay;
@@ -12,6 +13,7 @@ pub mod streaming;
 mod shortcut;
 mod tray;
 mod utils;
+pub mod webhook;
 
 use managers::audio::AudioRecordingManager;
 use managers::history::HistoryManager;
