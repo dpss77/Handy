@@ -40,6 +40,15 @@ export type PasteMethod = z.infer<typeof PasteMethodSchema>;
 export const ClipboardHandlingSchema = z.enum(["dont_modify", "copy_to_clipboard"]);
 export type ClipboardHandling = z.infer<typeof ClipboardHandlingSchema>;
 
+export const OllamaModeSchema = z.enum([
+  "disabled",
+  "punctuation",
+  "summarize",
+  "commands",
+  "custom",
+]);
+export type OllamaMode = z.infer<typeof OllamaModeSchema>;
+
 export const SettingsSchema = z.object({
   bindings: ShortcutBindingsMapSchema,
   push_to_talk: z.boolean(),
@@ -66,6 +75,12 @@ export const SettingsSchema = z.object({
   paste_method: PasteMethodSchema.optional().default("ctrl_v"),
   clipboard_handling: ClipboardHandlingSchema.optional().default("dont_modify"),
   mute_while_recording: z.boolean().optional().default(false),
+  // Ollama integration settings
+  enable_ollama: z.boolean().optional().default(false),
+  ollama_url: z.string().optional().default("http://localhost:11434"),
+  ollama_model: z.string().optional().default("llama3.2"),
+  ollama_mode: OllamaModeSchema.optional().default("disabled"),
+  ollama_custom_prompt: z.string().optional().default(""),
 });
 
 export const BindingResponseSchema = z.object({
@@ -96,3 +111,38 @@ export const ModelInfoSchema = z.object({
 });
 
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;
+
+// ============================================================================
+// Phase 2: New Features Types
+// ============================================================================
+
+export interface OllamaSettings {
+  enabled: boolean;
+  url: string;
+  model: string;
+  mode: OllamaMode;
+  customPrompt: string;
+}
+
+export interface ModelLoadProgress {
+  model_id: string;
+  stage: 'initializing' | 'loading' | 'ready';
+  progress_percent: number;
+}
+
+export interface PartialTranscription {
+  chunk_index: number;
+  total_chunks?: number;
+  text: string;
+  confidence: number;
+  is_final: boolean;
+}
+
+export interface HotplugEvent {
+  type: 'connected' | 'disconnected';
+  device: {
+    name: string;
+    is_input: boolean;
+    is_default: boolean;
+  };
+}

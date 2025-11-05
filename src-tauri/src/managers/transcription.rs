@@ -29,9 +29,11 @@
 
 use crate::audio_toolkit::apply_custom_words;
 use crate::managers::model::{EngineType, ModelManager};
+use crate::ollama::{OllamaClient, ProcessingMode};
+use crate::post_processing::{PostProcessingConfig, PostProcessor};
 use crate::settings::{get_settings, ModelUnloadTimeout};
 use anyhow::Result;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -433,6 +435,53 @@ impl TranscriptionManager {
             result.text
         };
 
+        // Apply Ollama post-processing if enabled
+        let final_result = if settings.enable_ollama {
+            debug!("Ollama post-processing enabled, processing text");
+
+            // Convert ollama_mode string to ProcessingMode enum
+            let processing_mode = match settings.ollama_mode.as_str() {
+                "punctuation" => ProcessingMode::Punctuation,
+                "summarize" => ProcessingMode::Summarize,
+                "commands" => ProcessingMode::CommandExtraction,
+                "custom" => ProcessingMode::Custom {
+                    prompt: settings.ollama_custom_prompt.clone(),
+                },
+                _ => ProcessingMode::Disabled,
+            };
+
+            if processing_mode != ProcessingMode::Disabled {
+                match OllamaClient::new(&settings.ollama_url) {
+                    Ok(client) => {
+                        // Create async runtime for Ollama request
+                        let runtime = tokio::runtime::Runtime::new().unwrap();
+                        match runtime.block_on(client.process_with_mode(
+                            &corrected_result,
+                            processing_mode,
+                            &settings.ollama_model,
+                        )) {
+                            Ok(enhanced) => {
+                                info!("Ollama post-processing successful");
+                                enhanced
+                            }
+                            Err(e) => {
+                                warn!("Ollama post-processing failed: {}. Using original text.", e);
+                                corrected_result
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to create Ollama client: {}. Using original text.", e);
+                        corrected_result
+                    }
+                }
+            } else {
+                corrected_result
+            }
+        } else {
+            corrected_result
+        };
+
         let et = std::time::Instant::now();
         let translation_note = if settings.translate_to_english {
             " (translated)"
@@ -449,7 +498,7 @@ impl TranscriptionManager {
             }
         }
 
-        Ok(corrected_result.trim().to_string())
+        Ok(final_result.trim().to_string())
     }
 }
 

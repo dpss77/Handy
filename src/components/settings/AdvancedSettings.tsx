@@ -3,6 +3,7 @@ import { ShowOverlay } from "./ShowOverlay";
 import { TranslateToEnglish } from "./TranslateToEnglish";
 import { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";
 import { CustomWords } from "./CustomWords";
+import { OllamaSettings } from "./OllamaSettings";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { StartHidden } from "./StartHidden";
 import { AutostartToggle } from "./AutostartToggle";
@@ -22,6 +23,9 @@ export const AdvancedSettings: React.FC = () => {
         <ModelUnloadTimeoutSetting descriptionMode="tooltip" grouped={true} />
         <CustomWords descriptionMode="tooltip" grouped />
       </SettingsGroup>
+
+      {/* Ollama Integration Section */}
+      <OllamaSettings />
     </div>
   );
 };
