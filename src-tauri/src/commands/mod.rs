@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod history;
 pub mod models;
+pub mod ollama;
 pub mod transcription;
 
 use crate::utils::cancel_current_operation;

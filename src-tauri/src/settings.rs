@@ -165,6 +165,17 @@ pub struct AppSettings {
     pub clipboard_handling: ClipboardHandling,
     #[serde(default)]
     pub mute_while_recording: bool,
+    // Ollama integration settings
+    #[serde(default)]
+    pub enable_ollama: bool,
+    #[serde(default = "default_ollama_url")]
+    pub ollama_url: String,
+    #[serde(default = "default_ollama_model")]
+    pub ollama_model: String,
+    #[serde(default = "default_ollama_mode")]
+    pub ollama_mode: String, // "disabled", "punctuation", "summarize", "commands", or "custom"
+    #[serde(default)]
+    pub ollama_custom_prompt: String,
 }
 
 fn default_model() -> String {
@@ -204,6 +215,18 @@ fn default_debug_mode() -> bool {
 
 fn default_word_correction_threshold() -> f64 {
     0.18
+}
+
+fn default_ollama_url() -> String {
+    "http://localhost:11434".to_string()
+}
+
+fn default_ollama_model() -> String {
+    "llama3.2".to_string()
+}
+
+fn default_ollama_mode() -> String {
+    "disabled".to_string()
 }
 
 fn default_history_limit() -> usize {

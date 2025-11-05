@@ -4,7 +4,9 @@ pub mod audio_toolkit;
 mod clipboard;
 mod commands;
 mod managers;
+pub mod ollama;
 mod overlay;
+pub mod post_processing;
 mod settings;
 mod shortcut;
 mod tray;
@@ -255,6 +257,9 @@ pub fn run() {
             commands::models::get_recommended_first_model,
             commands::audio::update_microphone_mode,
             commands::audio::get_microphone_mode,
+            commands::ollama::check_ollama_available,
+            commands::ollama::list_ollama_models,
+            commands::ollama::test_ollama_processing,
             commands::audio::get_available_microphones,
             commands::audio::set_selected_microphone,
             commands::audio::get_selected_microphone,

@@ -1,3 +1,32 @@
+//! Transcription management module
+//!
+//! This module provides the [`TranscriptionManager`] which handles:
+//! - Loading and managing Whisper/Parakeet models
+//! - Converting audio to text
+//! - Automatic model unloading based on idle timeout
+//! - Custom word corrections for domain-specific terminology
+//!
+//! # Architecture
+//!
+//! The manager supports multiple transcription engines (Whisper, Parakeet) and
+//! handles model lifecycle including:
+//! - Lazy loading: Models load on first use
+//! - Idle unloading: Automatic unload after configurable timeout
+//! - Thread-safe access: Multiple transcription requests can be queued
+//!
+//! # Example
+//!
+//! ```no_run
+//! use handy_app_lib::managers::transcription::TranscriptionManager;
+//! use std::sync::Arc;
+//!
+//! // Create manager with model manager
+//! // let manager = TranscriptionManager::new(&app_handle, model_manager)?;
+//!
+//! // Transcribe audio samples (f32, 16kHz)
+//! // let text = manager.transcribe(audio_samples)?;
+//! ```
+
 use crate::audio_toolkit::apply_custom_words;
 use crate::managers::model::{EngineType, ModelManager};
 use crate::settings::{get_settings, ModelUnloadTimeout};
@@ -19,19 +48,36 @@ use transcribe_rs::{
     TranscriptionEngine,
 };
 
+/// Model state change events emitted to frontend
+///
+/// Allows UI to show loading indicators and error messages.
 #[derive(Clone, Debug, Serialize)]
 pub struct ModelStateEvent {
+    /// Event type: "loading", "loaded", "unloading", "unloaded", "error"
     pub event_type: String,
+    /// Model identifier
     pub model_id: Option<String>,
+    /// Human-readable model name
     pub model_name: Option<String>,
+    /// Error message if event_type is "error"
     pub error: Option<String>,
 }
 
+/// Internal wrapper for loaded transcription engines
 enum LoadedEngine {
     Whisper(WhisperEngine),
     Parakeet(ParakeetEngine),
 }
 
+/// Main transcription manager
+///
+/// Manages the complete transcription pipeline from audio input to text output,
+/// including model lifecycle, custom word corrections, and idle timeout management.
+///
+/// # Thread Safety
+///
+/// This struct is `Clone` and thread-safe. Clones share the same underlying engine
+/// and state, allowing safe concurrent access from multiple threads.
 #[derive(Clone)]
 pub struct TranscriptionManager {
     engine: Arc<Mutex<Option<LoadedEngine>>>,

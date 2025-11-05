@@ -1,3 +1,32 @@
+//! Model management module
+//!
+//! This module provides the [`ModelManager`] which handles:
+//! - Downloading Whisper and Parakeet transcription models
+//! - Model metadata and discovery
+//! - Model selection based on accuracy/speed trade-offs
+//! - Async model downloads with progress tracking
+//!
+//! # Supported Engines
+//!
+//! - **Whisper**: OpenAI's Whisper models (Small, Medium, Turbo, Large)
+//! - **Parakeet**: NVIDIA's Parakeet models (V2, V3) - English only, highly optimized
+//!
+//! # Example
+//!
+//! ```no_run
+//! use handy_app_lib::managers::model::ModelManager;
+//! use std::sync::Arc;
+//!
+//! // Create manager
+//! // let manager = Arc::new(ModelManager::new(&app_handle)?);
+//!
+//! // List available models
+//! // let models = manager.list_models();
+//!
+//! // Download a model with progress tracking
+//! // manager.download_model("turbo").await?;
+//! ```
+
 use crate::settings::{get_settings, write_settings};
 use anyhow::Result;
 use flate2::read::GzDecoder;
@@ -12,37 +41,77 @@ use std::sync::Mutex;
 use tar::Archive;
 use tauri::{AppHandle, Emitter, Manager};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Transcription engine type
+///
+/// Determines which underlying engine processes the audio.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EngineType {
+    /// OpenAI Whisper models
+    ///
+    /// Multi-language support, various sizes (Small to Large)
     Whisper,
+    /// NVIDIA Parakeet models
+    ///
+    /// English-only, highly optimized for speed and accuracy
     Parakeet,
 }
 
+/// Complete metadata for a transcription model
+///
+/// Contains all information needed to download, display, and evaluate a model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
+    /// Unique identifier (e.g., "turbo", "parakeet-tdt-0.6b-v2")
     pub id: String,
+    /// Human-readable name (e.g., "Whisper Turbo")
     pub name: String,
+    /// Short description of model characteristics
     pub description: String,
+    /// Filename or directory name in models folder
     pub filename: String,
+    /// Download URL (None for bundled models)
     pub url: Option<String>,
+    /// Approximate size in megabytes
     pub size_mb: u64,
+    /// Whether model files exist locally
     pub is_downloaded: bool,
+    /// Whether model is currently being downloaded
     pub is_downloading: bool,
+    /// Bytes downloaded so far (for resume support)
     pub partial_size: u64,
+    /// True if model is a directory (Parakeet), false if single file (Whisper)
     pub is_directory: bool,
+    /// Which engine processes this model
     pub engine_type: EngineType,
-    pub accuracy_score: f32, // 0.0 to 1.0, higher is more accurate
-    pub speed_score: f32,    // 0.0 to 1.0, higher is faster
+    /// Accuracy rating: 0.0 (poor) to 1.0 (excellent)
+    pub accuracy_score: f32,
+    /// Speed rating: 0.0 (slow) to 1.0 (very fast)
+    pub speed_score: f32,
 }
 
+/// Progress information for model downloads
+///
+/// Emitted as events during async downloads to update UI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadProgress {
+    /// Model being downloaded
     pub model_id: String,
+    /// Bytes downloaded so far
     pub downloaded: u64,
+    /// Total bytes to download
     pub total: u64,
+    /// Completion percentage (0.0 to 100.0)
     pub percentage: f64,
 }
 
+/// Main model management system
+///
+/// Handles model discovery, downloads, and file system operations.
+///
+/// # Thread Safety
+///
+/// This struct is thread-safe and can be wrapped in `Arc` for sharing
+/// across async tasks and threads.
 pub struct ModelManager {
     app_handle: AppHandle,
     models_dir: PathBuf,
