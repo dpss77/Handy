@@ -1,8 +1,10 @@
 pub mod audio;
+pub mod export;
 pub mod history;
 pub mod models;
 pub mod ollama;
 pub mod transcription;
+pub mod webhook;
 
 use crate::utils::cancel_current_operation;
 use tauri::{AppHandle, Manager};
