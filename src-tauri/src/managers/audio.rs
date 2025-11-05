@@ -1,3 +1,35 @@
+//! Audio recording and management module
+//!
+//! This module provides the [`AudioRecordingManager`] which handles all aspects of audio
+//! recording in Handy, including:
+//! - Microphone device management and selection
+//! - Voice Activity Detection (VAD) integration
+//! - Recording state management
+//! - Push-to-talk and always-on microphone modes
+//!
+//! # Architecture
+//!
+//! The manager uses a state machine to track recording sessions and supports two microphone modes:
+//! - **OnDemand**: Opens microphone only when recording starts
+//! - **AlwaysOn**: Keeps microphone open continuously for lower latency
+//!
+//! # Example
+//!
+//! ```no_run
+//! use handy_app_lib::managers::audio::AudioRecordingManager;
+//!
+//! // Create manager (requires Tauri app handle)
+//! // let manager = AudioRecordingManager::new(&app_handle)?;
+//!
+//! // Start recording with a binding ID
+//! // let started = manager.try_start_recording("shortcut-1");
+//!
+//! // Stop recording and get audio samples
+//! // if let Some(samples) = manager.stop_recording("shortcut-1") {
+//! //     // Process audio samples (f32, 16kHz)
+//! // }
+//! ```
+
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::settings::get_settings;
 use crate::utils;
@@ -6,19 +38,40 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
 
+/// Sample rate expected by Whisper models (16kHz)
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
 /* ──────────────────────────────────────────────────────────────── */
 
+/// Recording state of the audio system
+///
+/// Tracks whether the system is idle or actively recording, along with
+/// the binding ID that initiated the recording.
 #[derive(Clone, Debug)]
 pub enum RecordingState {
+    /// No active recording
     Idle,
+    /// Currently recording audio
+    ///
+    /// # Fields
+    /// * `binding_id` - Identifier of the keyboard shortcut that started this recording
     Recording { binding_id: String },
 }
 
+/// Microphone operation mode
+///
+/// Determines when the microphone stream is opened and kept active.
 #[derive(Clone, Debug)]
 pub enum MicrophoneMode {
+    /// Microphone stays open continuously for lowest latency
+    ///
+    /// Best for: Frequent transcription usage
+    /// Trade-off: Higher power consumption
     AlwaysOn,
+    /// Microphone opens only when recording starts
+    ///
+    /// Best for: Occasional transcription usage
+    /// Trade-off: Small latency at recording start (~100-200ms)
     OnDemand,
 }
 
@@ -49,6 +102,20 @@ fn create_audio_recorder(
 
 /* ──────────────────────────────────────────────────────────────── */
 
+/// Main audio recording manager
+///
+/// Manages the complete audio recording pipeline including device selection,
+/// VAD (Voice Activity Detection), and recording session lifecycle.
+///
+/// # Thread Safety
+///
+/// This struct is `Clone` and thread-safe. Multiple clones can be used across
+/// threads and will share the same underlying state.
+///
+/// # Fields
+///
+/// All fields are private and accessed through public methods to ensure
+/// safe concurrent access.
 #[derive(Clone)]
 pub struct AudioRecordingManager {
     state: Arc<Mutex<RecordingState>>,
@@ -64,6 +131,30 @@ pub struct AudioRecordingManager {
 impl AudioRecordingManager {
     /* ---------- construction ------------------------------------------------ */
 
+    /// Creates a new audio recording manager
+    ///
+    /// Initializes the manager with settings from the app's configuration.
+    /// If `always_on_microphone` is enabled in settings, the microphone stream
+    /// will be opened immediately.
+    ///
+    /// # Arguments
+    ///
+    /// * `app` - Tauri application handle for accessing settings and emitting events
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(AudioRecordingManager)` - Successfully created manager
+    /// * `Err` - Failed to initialize (e.g., could not open microphone in always-on mode)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use handy_app_lib::managers::audio::AudioRecordingManager;
+    /// # fn example(app: &tauri::AppHandle) -> Result<(), anyhow::Error> {
+    /// let manager = AudioRecordingManager::new(app)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(app: &tauri::AppHandle) -> Result<Self, anyhow::Error> {
         let settings = get_settings(app);
         let mode = if settings.always_on_microphone {
@@ -211,6 +302,35 @@ impl AudioRecordingManager {
 
     /* ---------- recording --------------------------------------------------- */
 
+    /// Attempts to start a new recording session
+    ///
+    /// This method will fail if a recording is already in progress. Each recording
+    /// is associated with a binding ID (usually a keyboard shortcut identifier) to
+    /// ensure proper pairing with stop_recording calls.
+    ///
+    /// In OnDemand mode, this will also open the microphone stream if it's not already open.
+    ///
+    /// # Arguments
+    ///
+    /// * `binding_id` - Unique identifier for this recording session (e.g., "shortcut-1")
+    ///
+    /// # Returns
+    ///
+    /// * `true` - Recording started successfully
+    /// * `false` - Failed to start (already recording, mic unavailable, or device error)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use handy_app_lib::managers::audio::AudioRecordingManager;
+    /// # fn example(manager: &AudioRecordingManager) {
+    /// if manager.try_start_recording("push-to-talk") {
+    ///     println!("Recording started!");
+    /// } else {
+    ///     println!("Could not start recording");
+    /// }
+    /// # }
+    /// ```
     pub fn try_start_recording(&self, binding_id: &str) -> bool {
         let mut state = self.state.lock().unwrap();
 
