@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import "./App.css";
@@ -6,7 +7,9 @@ import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import Footer from "./components/footer";
 import Onboarding from "./components/onboarding";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
+import { StreamingTranscription } from "./components/transcription/StreamingTranscription";
 import { useSettings } from "./hooks/useSettings";
+import { useHotplugNotifications } from "./hooks/useHotplugNotifications";
 
 const renderSettingsContent = (section: SidebarSection) => {
   const ActiveComponent =
@@ -18,10 +21,33 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
+  const [isStreamingActive, setIsStreamingActive] = useState(false);
   const { settings, updateSetting } = useSettings();
+
+  // Enable hot-plug device notifications
+  useHotplugNotifications();
 
   useEffect(() => {
     checkOnboardingStatus();
+  }, []);
+
+  // Listen for recording events to show/hide streaming UI
+  useEffect(() => {
+    const unlistenStart = listen("recording-started", () => {
+      setIsStreamingActive(true);
+    });
+
+    const unlistenEnd = listen("recording-stopped", () => {
+      // Keep showing results for a moment after recording stops
+      setTimeout(() => {
+        setIsStreamingActive(false);
+      }, 2000);
+    });
+
+    return () => {
+      unlistenStart.then((fn) => fn());
+      unlistenEnd.then((fn) => fn());
+    };
   }, []);
 
   // Handle keyboard shortcuts for debug mode toggle
@@ -72,6 +98,8 @@ function App() {
   return (
     <div className="h-screen flex flex-col">
       <Toaster />
+      {/* Streaming transcription overlay */}
+      <StreamingTranscription isActive={isStreamingActive} />
       {/* Main content area that takes remaining space */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar

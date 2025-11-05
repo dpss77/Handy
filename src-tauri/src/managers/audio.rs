@@ -350,6 +350,10 @@ impl AudioRecordingManager {
                         binding_id: binding_id.to_string(),
                     };
                     debug!("Recording started for binding {binding_id}");
+
+                    // Emit recording-started event for frontend
+                    let _ = self.app_handle.emit("recording-started", ());
+
                     return true;
                 }
             }
@@ -393,6 +397,9 @@ impl AudioRecordingManager {
                 };
 
                 *self.is_recording.lock().unwrap() = false;
+
+                // Emit recording-stopped event for frontend
+                let _ = self.app_handle.emit("recording-stopped", ());
 
                 // In on-demand mode turn the mic off again
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {

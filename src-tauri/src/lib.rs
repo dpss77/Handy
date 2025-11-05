@@ -76,6 +76,34 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
 
+    // Initialize hot-plug detection for audio devices
+    let hotplug_detector = audio_toolkit::HotplugDetector::default();
+    let app_handle_clone = app_handle.clone();
+    hotplug_detector.start(move |event| {
+        use audio_toolkit::HotplugEvent;
+
+        let event_payload = match &event {
+            HotplugEvent::Connected(device) => serde_json::json!({
+                "type": "connected",
+                "device": {
+                    "name": device.name,
+                    "is_input": device.is_input,
+                    "is_default": device.is_default,
+                }
+            }),
+            HotplugEvent::Disconnected(device) => serde_json::json!({
+                "type": "disconnected",
+                "device": {
+                    "name": device.name,
+                    "is_input": device.is_input,
+                    "is_default": device.is_default,
+                }
+            }),
+        };
+
+        let _ = app_handle_clone.emit("hotplug-event", event_payload);
+    });
+
     // Initialize the shortcuts
     shortcut::init_shortcuts(app_handle);
 
