@@ -8,6 +8,7 @@ pub mod ollama;
 mod overlay;
 pub mod post_processing;
 mod settings;
+pub mod streaming;
 mod shortcut;
 mod tray;
 mod utils;
